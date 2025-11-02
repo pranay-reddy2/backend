@@ -15,6 +15,23 @@ class UserModel {
     return result.rows[0];
   }
 
+  static async createGoogleUser({ email, googleId, name, profilePicture, timezone = 'UTC' }) {
+    const result = await pool.query(
+      `INSERT INTO users (email, google_id, name, auth_provider, profile_picture, timezone)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (email)
+       DO UPDATE SET
+         google_id = EXCLUDED.google_id,
+         name = EXCLUDED.name,
+         profile_picture = EXCLUDED.profile_picture,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING id, email, name, google_id, auth_provider, profile_picture, timezone, created_at`,
+      [email, googleId, name, 'google', profilePicture, timezone]
+    );
+
+    return result.rows[0];
+  }
+
   static async findByEmail(email) {
     const result = await pool.query(
       'SELECT * FROM users WHERE email = $1',
@@ -23,9 +40,17 @@ class UserModel {
     return result.rows[0];
   }
 
+  static async findByGoogleId(googleId) {
+    const result = await pool.query(
+      'SELECT * FROM users WHERE google_id = $1',
+      [googleId]
+    );
+    return result.rows[0];
+  }
+
   static async findById(id) {
     const result = await pool.query(
-      'SELECT id, email, name, timezone, created_at FROM users WHERE id = $1',
+      'SELECT id, email, name, auth_provider, profile_picture, timezone, created_at FROM users WHERE id = $1',
       [id]
     );
     return result.rows[0];

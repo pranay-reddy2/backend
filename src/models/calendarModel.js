@@ -1,7 +1,14 @@
-const pool = require('../config/database');
+const pool = require("../config/database");
 
 class CalendarModel {
-  static async create({ ownerId, name, description, color = '#1a73e8', isPrimary = false, timezone = 'UTC' }) {
+  static async create({
+    ownerId,
+    name,
+    description,
+    color = "#1a73e8",
+    isPrimary = false,
+    timezone = "UTC",
+  }) {
     const result = await pool.query(
       `INSERT INTO calendars (owner_id, name, description, color, is_primary, timezone)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -12,16 +19,15 @@ class CalendarModel {
   }
 
   static async findById(id) {
-    const result = await pool.query(
-      'SELECT * FROM calendars WHERE id = $1',
-      [id]
-    );
+    const result = await pool.query("SELECT * FROM calendars WHERE id = $1", [
+      id,
+    ]);
     return result.rows[0];
   }
 
   static async findByOwnerId(ownerId) {
     const result = await pool.query(
-      'SELECT * FROM calendars WHERE owner_id = $1 ORDER BY is_primary DESC, name ASC',
+      "SELECT * FROM calendars WHERE owner_id = $1 ORDER BY is_primary DESC, name ASC",
       [ownerId]
     );
     return result.rows;
@@ -32,8 +38,8 @@ class CalendarModel {
     const result = await pool.query(
       `SELECT c.*, cs.permission
        FROM calendars c
-       LEFT JOIN calendar_shares cs ON c.id = cs.calendar_id AND cs.user_id = $1
-       WHERE c.owner_id = $1 OR cs.user_id = $1
+       LEFT JOIN calendar_shares cs ON c.id = cs.calendar_id AND cs.shared_with_user_id = $1
+       WHERE c.owner_id = $1 OR cs.shared_with_user_id = $1
        ORDER BY c.is_primary DESC, c.name ASC`,
       [userId]
     );
@@ -56,14 +62,14 @@ class CalendarModel {
   }
 
   static async delete(id) {
-    await pool.query('DELETE FROM calendars WHERE id = $1', [id]);
+    await pool.query("DELETE FROM calendars WHERE id = $1", [id]);
   }
 
   static async shareCalendar(calendarId, userId, permission) {
     const result = await pool.query(
-      `INSERT INTO calendar_shares (calendar_id, user_id, permission)
+      `INSERT INTO calendar_shares (calendar_id, shared_with_user_id, permission)
        VALUES ($1, $2, $3)
-       ON CONFLICT (calendar_id, user_id)
+       ON CONFLICT (calendar_id, shared_with_user_id)
        DO UPDATE SET permission = $3
        RETURNING *`,
       [calendarId, userId, permission]
@@ -73,7 +79,7 @@ class CalendarModel {
 
   static async removeShare(calendarId, userId) {
     await pool.query(
-      'DELETE FROM calendar_shares WHERE calendar_id = $1 AND user_id = $2',
+      "DELETE FROM calendar_shares WHERE calendar_id = $1 AND shared_with_user_id = $2",
       [calendarId, userId]
     );
   }
@@ -82,28 +88,41 @@ class CalendarModel {
     const result = await pool.query(
       `SELECT cs.*, u.email, u.name
        FROM calendar_shares cs
-       JOIN users u ON cs.user_id = u.id
+       JOIN users u ON cs.shared_with_user_id = u.id
        WHERE cs.calendar_id = $1`,
       [calendarId]
     );
     return result.rows;
   }
 
-  static async hasPermission(calendarId, userId, requiredPermission = 'view') {
+  static async hasPermission(calendarId, userId, requiredPermission = "view") {
+    // Parse IDs to ensure they're integers
+    const calId = parseInt(calendarId);
+    const uId = parseInt(userId);
+
+    // Validate parsed IDs
+    if (isNaN(calId) || isNaN(uId)) {
+      console.log("Invalid ID format:", { calendarId, userId });
+      return false;
+    }
+
     const result = await pool.query(
       `SELECT c.owner_id, cs.permission
        FROM calendars c
-       LEFT JOIN calendar_shares cs ON c.id = cs.calendar_id AND cs.user_id = $2
+       LEFT JOIN calendar_shares cs ON c.id = cs.calendar_id AND cs.shared_with_user_id = $2
        WHERE c.id = $1`,
-      [calendarId, userId]
+      [calId, uId]
     );
 
-    if (!result.rows[0]) return false;
+    if (!result.rows[0]) {
+      console.log("Calendar not found:", calId);
+      return false;
+    }
 
     const { owner_id, permission } = result.rows[0];
 
-    // Owner has all permissions
-    if (owner_id === userId) return true;
+    // Owner has all permissions (use == to handle type coercion)
+    if (owner_id == uId) return true;
 
     // Check permission level
     const permissionLevels = { view: 1, edit: 2, manage: 3 };

@@ -71,26 +71,82 @@ class WebSocketServer {
   }
 
   // Broadcast event changes to all users with access to a calendar
-  broadcastEventChange(calendarId, eventData, action) {
-    const message = JSON.stringify({
+  async broadcastEventChange(calendarId, eventData, action, userId = null) {
+    const message = {
       type: 'event_change',
-      action, // 'created', 'updated', 'deleted'
+      action, // 'created', 'updated', 'deleted', 'rescheduled'
       calendarId,
-      event: eventData
-    });
+      event: eventData,
+      timestamp: new Date().toISOString(),
+      userId // User who made the change
+    };
 
-    // In a production app, you would query calendar_shares to find all users with access
-    // For now, broadcast to all connected users (simplified)
-    this.broadcast(message);
+    // Get all users who have access to this calendar
+    const pool = require('../config/database');
+    const result = await pool.query(
+      `SELECT DISTINCT user_id FROM (
+        SELECT owner_id as user_id FROM calendars WHERE id = $1
+        UNION
+        SELECT shared_with_user_id as user_id FROM calendar_shares WHERE calendar_id = $1
+      ) AS users`,
+      [calendarId]
+    );
+
+    // Send to each user with access
+    result.rows.forEach(row => {
+      this.sendToUser(row.user_id, message);
+    });
   }
 
   // Broadcast calendar changes
-  broadcastCalendarChange(calendarId, calendarData, action) {
-    const message = JSON.stringify({
+  async broadcastCalendarChange(calendarId, calendarData, action, userId = null) {
+    const message = {
       type: 'calendar_change',
       action, // 'created', 'updated', 'deleted', 'shared'
-      calendar: calendarData
+      calendar: calendarData,
+      timestamp: new Date().toISOString(),
+      userId
+    };
+
+    // Get all users who have access
+    const pool = require('../config/database');
+    const result = await pool.query(
+      `SELECT DISTINCT user_id FROM (
+        SELECT owner_id as user_id FROM calendars WHERE id = $1
+        UNION
+        SELECT shared_with_user_id as user_id FROM calendar_shares WHERE calendar_id = $1
+      ) AS users`,
+      [calendarId]
+    );
+
+    result.rows.forEach(row => {
+      this.sendToUser(row.user_id, message);
     });
+  }
+
+  // Broadcast activity/notification
+  broadcastActivity(userIds, activity) {
+    const message = {
+      type: 'activity',
+      activity,
+      timestamp: new Date().toISOString()
+    };
+
+    userIds.forEach(userId => {
+      this.sendToUser(userId, message);
+    });
+  }
+
+  // Send typing indicator (for collaborative editing)
+  broadcastTyping(calendarId, eventId, userId, isTyping) {
+    const message = {
+      type: 'typing',
+      calendarId,
+      eventId,
+      userId,
+      isTyping,
+      timestamp: new Date().toISOString()
+    };
 
     this.broadcast(message);
   }

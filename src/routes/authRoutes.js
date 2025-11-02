@@ -1,11 +1,14 @@
-const express = require('express');
-const AuthController = require('../controllers/authController');
-const authMiddleware = require('../middlewares/auth');
+const express = require("express");
+const { verifyGoogleToken } = require("../controllers/googleAuthController");
+const { getProfile } = require("../controllers/authController");
+const { authenticate } = require("../middlewares/auth");
 
 const router = express.Router();
 
-router.post('/register', AuthController.register);
-router.post('/login', AuthController.login);
-router.get('/profile', authMiddleware, AuthController.getProfile);
+// Google OAuth authentication
+router.post("/google", verifyGoogleToken);
+
+// Get user profile (protected route)
+router.get("/profile", authenticate, getProfile);
 
 module.exports = router;

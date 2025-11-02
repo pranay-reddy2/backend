@@ -1,5 +1,6 @@
-const pool = require('../config/database');
-const { RRule } = require('rrule');
+const pool = require("../config/database");
+const { RRule } = require("rrule");
+const { v4: uuidv4 } = require("uuid");
 
 class EventModel {
   static async create({
@@ -11,33 +12,47 @@ class EventModel {
     startTime,
     endTime,
     isAllDay = false,
-    timezone = 'UTC',
+    timezone = "UTC",
     isRecurring = false,
     recurrenceRule = null,
     recurrenceId = null,
-    status = 'confirmed'
+    seriesId = null,
+    status = "confirmed",
+    color = null,
   }) {
+    // Generate series_id for new recurring events
+    const finalSeriesId = isRecurring && !seriesId ? uuidv4() : seriesId;
+
     const result = await pool.query(
       `INSERT INTO events (
         calendar_id, creator_id, title, description, location,
         start_time, end_time, is_all_day, timezone,
-        is_recurring, recurrence_rule, recurrence_id, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        is_recurring, recurrence_rule, recurrence_id, series_id, status, color
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *`,
       [
-        calendarId, creatorId, title, description, location,
-        startTime, endTime, isAllDay, timezone,
-        isRecurring, recurrenceRule, recurrenceId, status
+        calendarId,
+        creatorId,
+        title,
+        description,
+        location,
+        startTime,
+        endTime,
+        isAllDay,
+        timezone,
+        isRecurring,
+        recurrenceRule,
+        recurrenceId,
+        finalSeriesId,
+        status,
+        color,
       ]
     );
     return result.rows[0];
   }
 
   static async findById(id) {
-    const result = await pool.query(
-      'SELECT * FROM events WHERE id = $1',
-      [id]
-    );
+    const result = await pool.query("SELECT * FROM events WHERE id = $1", [id]);
     return result.rows[0];
   }
 
@@ -69,45 +84,72 @@ class EventModel {
     return result.rows;
   }
 
-  static async update(id, {
-    title,
-    description,
-    location,
-    startTime,
-    endTime,
-    isAllDay,
-    timezone,
-    recurrenceRule,
-    status
-  }) {
+  static async update(
+    id,
+    {
+      title,
+      description,
+      location,
+      startTime,
+      endTime,
+      isAllDay,
+      timezone,
+      recurrenceRule,
+      isRecurring,
+      status,
+      color,
+    }
+  ) {
     const result = await pool.query(
       `UPDATE events
-       SET title = COALESCE($1, title),
-           description = COALESCE($2, description),
-           location = COALESCE($3, location),
-           start_time = COALESCE($4, start_time),
-           end_time = COALESCE($5, end_time),
-           is_all_day = COALESCE($6, is_all_day),
-           timezone = COALESCE($7, timezone),
-           recurrence_rule = COALESCE($8, recurrence_rule),
-           status = COALESCE($9, status),
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $10
-       RETURNING *`,
-      [title, description, location, startTime, endTime, isAllDay, timezone, recurrenceRule, status, id]
+     SET title = COALESCE($1, title),
+         description = COALESCE($2, description),
+         location = COALESCE($3, location),
+         start_time = COALESCE($4, start_time),
+         end_time = COALESCE($5, end_time),
+         is_all_day = COALESCE($6, is_all_day),
+         timezone = COALESCE($7, timezone),
+         recurrence_rule = $8,
+         is_recurring = COALESCE($9, is_recurring),
+         status = COALESCE($10, status),
+         color = $11,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $12
+     RETURNING *`,
+      [
+        title,
+        description,
+        location,
+        startTime,
+        endTime,
+        isAllDay,
+        timezone,
+        recurrenceRule,
+        isRecurring,
+        status,
+        color,
+        id,
+      ]
     );
     return result.rows[0];
   }
-
   static async delete(id) {
-    await pool.query('DELETE FROM events WHERE id = $1', [id]);
+    await pool.query("DELETE FROM events WHERE id = $1", [id]);
   }
 
   static async deleteRecurringSeries(recurrenceId) {
-    await pool.query('DELETE FROM events WHERE recurrence_id = $1 OR id = $1', [recurrenceId]);
+    await pool.query("DELETE FROM events WHERE recurrence_id = $1 OR id = $1", [
+      recurrenceId,
+    ]);
   }
 
-  static async addAttendee(eventId, userId, email, status = 'pending', isOrganizer = false) {
+  static async addAttendee(
+    eventId,
+    userId,
+    email,
+    status = "pending",
+    isOrganizer = false
+  ) {
     const result = await pool.query(
       `INSERT INTO event_attendees (event_id, user_id, email, status, is_organizer)
        VALUES ($1, $2, $3, $4, $5)
@@ -141,7 +183,7 @@ class EventModel {
     return result.rows;
   }
 
-  static async addReminder(eventId, userId, minutesBefore, method = 'popup') {
+  static async addReminder(eventId, userId, minutesBefore, method = "popup") {
     const result = await pool.query(
       `INSERT INTO reminders (event_id, user_id, minutes_before, method)
        VALUES ($1, $2, $3, $4)
@@ -153,7 +195,7 @@ class EventModel {
 
   static async getReminders(eventId, userId) {
     const result = await pool.query(
-      'SELECT * FROM reminders WHERE event_id = $1 AND user_id = $2',
+      "SELECT * FROM reminders WHERE event_id = $1 AND user_id = $2",
       [eventId, userId]
     );
     return result.rows;
@@ -176,7 +218,7 @@ class EventModel {
       params.push(calendarIds);
     }
 
-    sql += ' ORDER BY e.start_time DESC LIMIT 50';
+    sql += " ORDER BY e.start_time DESC LIMIT 50";
 
     const result = await pool.query(sql, params);
     return result.rows;
@@ -189,7 +231,11 @@ class EventModel {
 
     try {
       const rule = RRule.fromString(event.recurrence_rule);
-      const occurrences = rule.between(new Date(startDate), new Date(endDate), true);
+      const occurrences = rule.between(
+        new Date(startDate),
+        new Date(endDate),
+        true
+      );
 
       return occurrences.map((occurrence, index) => {
         const duration = new Date(event.end_time) - new Date(event.start_time);
@@ -199,11 +245,11 @@ class EventModel {
           start_time: occurrence.toISOString(),
           end_time: new Date(occurrence.getTime() + duration).toISOString(),
           is_recurring_instance: true,
-          original_event_id: event.id
+          original_event_id: event.id,
         };
       });
     } catch (error) {
-      console.error('Error expanding recurring event:', error);
+      console.error("Error expanding recurring event:", error);
       return [event];
     }
   }
