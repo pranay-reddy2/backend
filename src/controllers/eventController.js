@@ -2,6 +2,7 @@ const EventModel = require("../models/eventModel");
 const CalendarModel = require("../models/calendarModel");
 
 class EventController {
+  // -------------------- CREATE EVENT (with debug logging) --------------------
   static async createEvent(req, res) {
     try {
       const {
@@ -19,6 +20,12 @@ class EventController {
         attendees,
         reminders,
       } = req.body;
+
+      console.log("📝 Creating event with data:", {
+        title,
+        calendarId,
+        reminders,
+      });
 
       const hasPermission = await CalendarModel.hasPermission(
         calendarId,
@@ -44,74 +51,95 @@ class EventController {
         color,
       });
 
-      // Add attendees with error handling
+      console.log("✅ Event created with ID:", event.id);
+
+      // --- Add Attendees ---
       if (attendees && attendees.length > 0) {
         try {
-          for (const attendeeEmail of attendees) {
-            // If attendees is just an array of email strings
-            if (typeof attendeeEmail === "string") {
+          for (const attendee of attendees) {
+            if (typeof attendee === "string") {
               await EventModel.addAttendee(
                 event.id,
-                null, // userId - will be looked up by email
-                attendeeEmail,
+                null,
+                attendee,
                 "pending",
                 false
               );
             } else {
-              // If attendees is an array of objects
               await EventModel.addAttendee(
                 event.id,
-                attendeeEmail.userId || null,
-                attendeeEmail.email,
-                attendeeEmail.status || "pending",
-                attendeeEmail.isOrganizer || false
+                attendee.userId || null,
+                attendee.email,
+                attendee.rsvp_status || attendee.status || "pending",
+                attendee.isOrganizer || false
               );
             }
           }
         } catch (attendeeError) {
           console.warn(
-            "Warning: Could not add some attendees:",
+            "⚠️ Could not add some attendees:",
             attendeeError.message
           );
-          // Don't throw - event is created successfully
         }
       }
 
-      // Add reminders with error handling
+      // --- Add Reminders ---
       if (reminders && reminders.length > 0) {
+        console.log("📢 Adding reminders:", reminders);
+
         try {
           for (const reminder of reminders) {
-            // Handle both camelCase and snake_case
             const minutesBefore =
               reminder.minutes_before || reminder.minutesBefore;
             const method = reminder.method || "notification";
 
+            console.log("  ➕ Adding reminder:", { minutesBefore, method });
+
             if (minutesBefore !== null && minutesBefore !== undefined) {
-              await EventModel.addReminder(
+              const addedReminder = await EventModel.addReminder(
                 event.id,
                 req.user.userId,
                 parseInt(minutesBefore),
                 method
               );
+              console.log("  ✅ Reminder added:", addedReminder);
+            } else {
+              console.warn(
+                "  ⚠️ Invalid reminder (no minutes_before):",
+                reminder
+              );
             }
           }
         } catch (reminderError) {
-          console.warn(
-            "Warning: Could not add some reminders:",
-            reminderError.message
-          );
-          // Don't throw - event is created successfully
+          console.error("❌ Error adding reminders:", reminderError);
+          console.error("Stack trace:", reminderError.stack);
         }
+      } else {
+        console.log("ℹ️ No reminders to add");
       }
 
-      // Fetch the complete event with attendees and reminders
+      // --- Fetch Full Event Data ---
       const attendeesList = await EventModel.getAttendees(event.id).catch(
-        () => []
+        () => {
+          console.warn("⚠️ Failed to fetch attendees");
+          return [];
+        }
       );
+
       const remindersList = await EventModel.getReminders(
         event.id,
         req.user.userId
-      ).catch(() => []);
+      ).catch((err) => {
+        console.warn("⚠️ Failed to fetch reminders:", err.message);
+        return [];
+      });
+
+      console.log("📋 Final event data:", {
+        id: event.id,
+        title: event.title,
+        reminders: remindersList,
+        attendees: attendeesList,
+      });
 
       return res.status(201).json({
         success: true,
@@ -123,7 +151,8 @@ class EventController {
         message: "Event created successfully",
       });
     } catch (error) {
-      console.error("Event creation error:", error);
+      console.error("❌ Event creation error:", error);
+      console.error("Stack trace:", error.stack);
       return res.status(500).json({
         success: false,
         error: "Failed to create event",
@@ -132,9 +161,11 @@ class EventController {
     }
   }
 
+  // -------------------- GET EVENT BY ID --------------------
   static async getEvents(req, res) {
     try {
       const { calendarIds, startDate, endDate } = req.query;
+      const userId = req.user.userId;
 
       if (!calendarIds || !startDate || !endDate) {
         return res.status(400).json({ error: "Missing required parameters" });
@@ -146,7 +177,7 @@ class EventController {
       for (const calendarId of calendarIdArray) {
         const hasPermission = await CalendarModel.hasPermission(
           calendarId,
-          req.user.userId,
+          userId,
           "view"
         );
         if (!hasPermission) {
@@ -177,41 +208,47 @@ class EventController {
         }
       }
 
-      res.json(expandedEvents);
+      // **FIX: Fetch reminders and attendees for each event**
+      const eventsWithDetails = await Promise.all(
+        expandedEvents.map(async (event) => {
+          // Get the base event ID (strip instance suffix if it's a recurring instance)
+          const baseEventId = event.is_recurring_instance
+            ? event.original_event_id
+            : event.id;
+
+          try {
+            const [reminders, attendees] = await Promise.all([
+              EventModel.getReminders(baseEventId, userId).catch(() => []),
+              EventModel.getAttendees(baseEventId).catch(() => []),
+            ]);
+
+            return {
+              ...event,
+              reminders: reminders || [],
+              attendees: attendees || [],
+            };
+          } catch (error) {
+            console.error(
+              `Error fetching details for event ${event.id}:`,
+              error
+            );
+            return {
+              ...event,
+              reminders: [],
+              attendees: [],
+            };
+          }
+        })
+      );
+
+      res.json(eventsWithDetails);
     } catch (error) {
       console.error("Fetch events error:", error);
       res.status(500).json({ error: "Failed to fetch events" });
     }
   }
 
-  static async getEvent(req, res) {
-    try {
-      const { id } = req.params;
-
-      const event = await EventModel.findById(id);
-      if (!event) {
-        return res.status(404).json({ error: "Event not found" });
-      }
-
-      const hasPermission = await CalendarModel.hasPermission(
-        event.calendar_id,
-        req.user.userId,
-        "view"
-      );
-      if (!hasPermission) {
-        return res.status(403).json({ error: "Access denied" });
-      }
-
-      const attendees = await EventModel.getAttendees(id);
-      const reminders = await EventModel.getReminders(id, req.user.userId);
-
-      res.json({ ...event, attendees, reminders });
-    } catch (error) {
-      console.error("Fetch event error:", error);
-      res.status(500).json({ error: "Failed to fetch event" });
-    }
-  }
-
+  // -------------------- UPDATE EVENT --------------------
   static async updateEvent(req, res) {
     try {
       const { id } = req.params;
@@ -262,50 +299,41 @@ class EventController {
       // Update attendees if provided
       if (attendees) {
         try {
-          // Remove existing attendees
           await EventModel.removeAllAttendees(id);
-
-          // Add new attendees
-          for (const attendeeEmail of attendees) {
-            if (typeof attendeeEmail === "string") {
+          for (const attendee of attendees) {
+            if (typeof attendee === "string") {
               await EventModel.addAttendee(
                 id,
                 null,
-                attendeeEmail,
+                attendee,
                 "pending",
                 false
               );
             } else {
               await EventModel.addAttendee(
                 id,
-                attendeeEmail.userId || null,
-                attendeeEmail.email,
-                attendeeEmail.status || "pending",
-                attendeeEmail.isOrganizer || false
+                attendee.userId || null,
+                attendee.email,
+                attendee.rsvp_status || attendee.status || "pending",
+                attendee.isOrganizer || false
               );
             }
           }
-        } catch (attendeeError) {
-          console.warn(
-            "Warning: Could not update attendees:",
-            attendeeError.message
-          );
+        } catch (err) {
+          console.warn("Warning: Could not update attendees:", err.message);
         }
       }
 
       // Update reminders if provided
       if (reminders) {
         try {
-          // Remove existing reminders
           await EventModel.removeAllReminders(id, req.user.userId);
-
-          // Add new reminders
           for (const reminder of reminders) {
             const minutesBefore =
               reminder.minutes_before || reminder.minutesBefore;
             const method = reminder.method || "notification";
 
-            if (minutesBefore !== null && minutesBefore !== undefined) {
+            if (minutesBefore != null) {
               await EventModel.addReminder(
                 id,
                 req.user.userId,
@@ -314,15 +342,11 @@ class EventController {
               );
             }
           }
-        } catch (reminderError) {
-          console.warn(
-            "Warning: Could not update reminders:",
-            reminderError.message
-          );
+        } catch (err) {
+          console.warn("Warning: Could not update reminders:", err.message);
         }
       }
 
-      // Fetch updated event with relations
       const attendeesList = await EventModel.getAttendees(id).catch(() => []);
       const remindersList = await EventModel.getReminders(
         id,
@@ -348,6 +372,7 @@ class EventController {
     }
   }
 
+  // -------------------- DELETE EVENT --------------------
   static async deleteEvent(req, res) {
     try {
       const { id } = req.params;
@@ -387,6 +412,7 @@ class EventController {
     }
   }
 
+  // -------------------- UPDATE ATTENDEE STATUS --------------------
   static async updateAttendeeStatus(req, res) {
     try {
       const { id } = req.params;
@@ -418,6 +444,7 @@ class EventController {
     }
   }
 
+  // -------------------- SEARCH EVENTS --------------------
   static async searchEvents(req, res) {
     try {
       const { q, calendarIds } = req.query;

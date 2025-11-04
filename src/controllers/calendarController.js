@@ -1,5 +1,6 @@
 const CalendarModel = require("../models/calendarModel");
 const UserModel = require("../models/userModel");
+const { getEvents } = require("./eventController");
 
 // Create calendar
 const createCalendar = async (req, res) => {
@@ -178,6 +179,34 @@ const removeShare = async (req, res) => {
     console.error("Remove share error:", error);
     res.status(500).json({ error: "Failed to remove share" });
   }
+  if (attendees && attendees.length > 0) {
+    try {
+      for (const attendeeEmail of attendees) {
+        if (typeof attendeeEmail === "string") {
+          await EventModel.addAttendee(
+            event.id,
+            null,
+            attendeeEmail,
+            "pending", // rsvpStatus, not status
+            false
+          );
+        } else {
+          await EventModel.addAttendee(
+            event.id,
+            attendeeEmail.userId || null,
+            attendeeEmail.email,
+            attendeeEmail.rsvp_status || attendeeEmail.status || "pending", // Handle both field names
+            attendeeEmail.isOrganizer || false
+          );
+        }
+      }
+    } catch (attendeeError) {
+      console.warn(
+        "Warning: Could not add some attendees:",
+        attendeeError.message
+      );
+    }
+  }
 };
 
 module.exports = {
@@ -189,4 +218,5 @@ module.exports = {
   shareCalendar,
   getShares,
   removeShare,
+  getEvents,
 };

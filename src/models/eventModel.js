@@ -253,6 +253,99 @@ class EventModel {
       return [event];
     }
   }
+  static async addReminder(
+    eventId,
+    userId,
+    minutesBefore,
+    method = "notification"
+  ) {
+    const result = await pool.query(
+      `INSERT INTO reminders (event_id, user_id, minutes_before, method)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [eventId, userId, minutesBefore, method]
+    );
+    return result.rows[0];
+  }
+
+  // Get reminders for an event
+  static async getReminders(eventId, userId) {
+    const result = await pool.query(
+      "SELECT * FROM reminders WHERE event_id = $1 AND user_id = $2 ORDER BY minutes_before ASC",
+      [eventId, userId]
+    );
+    return result.rows;
+  }
+
+  // **NEW METHOD** - Remove all reminders for a user's event
+  static async removeAllReminders(eventId, userId) {
+    const result = await pool.query(
+      "DELETE FROM reminders WHERE event_id = $1 AND user_id = $2",
+      [eventId, userId]
+    );
+    return result.rowCount;
+  }
+
+  // **NEW METHOD** - Remove a specific reminder
+  static async removeReminder(reminderId, userId) {
+    const result = await pool.query(
+      "DELETE FROM reminders WHERE id = $1 AND user_id = $2 RETURNING *",
+      [reminderId, userId]
+    );
+    return result.rows[0];
+  }
+
+  // **NEW METHOD** - Remove all attendees from an event
+  static async removeAllAttendees(eventId) {
+    const result = await pool.query(
+      "DELETE FROM event_attendees WHERE event_id = $1",
+      [eventId]
+    );
+    return result.rowCount;
+  }
+
+  // Fixed addAttendee method with correct field name
+  static async addAttendee(
+    eventId,
+    userId,
+    email,
+    rsvpStatus = "pending",
+    isOrganizer = false
+  ) {
+    // If userId is not provided, try to find user by email
+    let finalUserId = userId;
+    if (!finalUserId && email) {
+      const userResult = await pool.query(
+        "SELECT id FROM users WHERE email = $1",
+        [email]
+      );
+      if (userResult.rows.length > 0) {
+        finalUserId = userResult.rows[0].id;
+      }
+    }
+
+    const result = await pool.query(
+      `INSERT INTO event_attendees (event_id, user_id, email, rsvp_status, is_organizer)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (event_id, user_id)
+       DO UPDATE SET rsvp_status = $4, is_organizer = $5
+       RETURNING *`,
+      [eventId, finalUserId, email, rsvpStatus, isOrganizer]
+    );
+    return result.rows[0];
+  }
+
+  // Fixed updateAttendeeStatus with correct field name
+  static async updateAttendeeStatus(eventId, userId, rsvpStatus) {
+    const result = await pool.query(
+      `UPDATE event_attendees
+       SET rsvp_status = $1, responded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+       WHERE event_id = $2 AND user_id = $3
+       RETURNING *`,
+      [rsvpStatus, eventId, userId]
+    );
+    return result.rows[0];
+  }
 }
 
 module.exports = EventModel;
