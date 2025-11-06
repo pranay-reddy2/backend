@@ -149,7 +149,7 @@ A **100% feature-complete Google Calendar clone** built with React, Express.js, 
 
 5. **Access the application**
    - Frontend: http://localhost:5173
-   - Backend API: http://localhost:5000
+   - Backend API: http://localhost:5050
 
 ### Option 2: Docker Development
 
@@ -166,7 +166,7 @@ A **100% feature-complete Google Calendar clone** built with React, Express.js, 
 
 3. **Access the application**
    - Frontend: http://localhost:5173
-   - Backend API: http://localhost:5000
+   - Backend API: http://localhost:5050
    - PostgreSQL: localhost:5432
 
 ## Database Schema
@@ -211,7 +211,7 @@ The application uses WebSocket for real-time updates:
 - `event_change` - Event created/updated/deleted
 - `calendar_change` - Calendar created/updated/deleted/shared
 
-Connect with: `ws://localhost:5000?token=<jwt-token>`
+Connect with: `ws://localhost:5050?token=<jwt-token>`
 
 ## Environment Variables
 
@@ -222,7 +222,7 @@ DB_PORT=5432
 DB_NAME=calendar_db
 DB_USER=postgres
 DB_PASSWORD=postgres
-PORT=5000
+PORT=5050
 NODE_ENV=development
 JWT_SECRET=your-secret-key
 JWT_EXPIRES_IN=7d
@@ -232,7 +232,7 @@ CLIENT_URL=http://localhost:5173
 ### Frontend
 Create `.env` in frontend directory:
 ```env
-VITE_API_URL=http://localhost:5000/api
+VITE_API_URL=http://localhost:5050/api
 ```
 
 ## Development Commands
