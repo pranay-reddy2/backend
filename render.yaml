@@ -1,4 +1,4 @@
-yamlservices:
+services:
   # PostgreSQL Database
   - type: pserv
     name: calendar-db
@@ -25,7 +25,7 @@ yamlservices:
         sync: false
       - key: CLIENT_URL
         sync: false
-      
+        
   # Frontend
   - type: web
     name: calendar-frontend
