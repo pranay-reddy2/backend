@@ -1,8 +1,7 @@
 services:
   # PostgreSQL Database
-  - type: pserv
+  - type: postgres
     name: calendar-db
-    env: docker
     plan: free
     
   # Backend API
