@@ -21,7 +21,7 @@ import notificationRoutes from "./routes/notifications.js";
 import availabilityRoutes from "./routes/availability.js";
 import holidayRoutes from "./routes/holidayRoutes.js";
 import reminderRoutes from "./routes/reminderRoutes.js";
-import WebSocketServer from "./websockets.js";
+import WebSocketServer from "./websockets/index.js";
 
 
 // ------------------------
