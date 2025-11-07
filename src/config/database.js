@@ -1,21 +1,35 @@
+// ------------------------------------------
+// PostgreSQL Database Connection (Neon + Railway)
+// ------------------------------------------
 const { Pool } = require("pg");
 require("dotenv").config();
 
+// ✅ Use DATABASE_URL directly from environment variables
+// (Railway / Neon provides this securely)
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  console.error("❌ DATABASE_URL is missing!");
+  process.exit(1); // stop the server if no DB connection string
+}
+
+// ✅ Create a connection pool with SSL (required for Neon)
 const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
+  connectionString,
+  ssl: { rejectUnauthorized: false },
 });
 
-pool.on("connect", () => {
-  console.log("Connected to PostgreSQL database");
-});
+// ✅ Verify the connection at startup
+pool
+  .connect()
+  .then((client) => {
+    console.log("🟢 Connected to PostgreSQL database successfully!");
+    client.release();
+  })
+  .catch((err) => {
+    console.error("❌ Failed to connect to PostgreSQL:", err.message);
+    process.exit(1); // crash if DB fails on startup
+  });
 
-pool.on("error", (err) => {
-  console.error("Unexpected error on idle client", err);
-  process.exit(-1);
-});
-
+// Export the pool for queries
 module.exports = pool;
