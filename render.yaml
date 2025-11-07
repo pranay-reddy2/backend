@@ -1,10 +1,9 @@
 services:
   # PostgreSQL Database
-  - type: pserv
+  - type: postgresql
     name: calendar-db
-    env: docker
     plan: free
-    
+
   # Backend API
   - type: web
     name: calendar-backend
@@ -25,11 +24,12 @@ services:
         sync: false
       - key: CLIENT_URL
         sync: false
-        
+
   # Frontend
   - type: web
     name: calendar-frontend
     env: static
+    plan: free
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist
     envVars:
