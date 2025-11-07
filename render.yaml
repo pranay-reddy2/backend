@@ -1,9 +1,4 @@
 services:
-  # PostgreSQL Database
-  - type: postgresql
-    name: calendar-db
-    plan: free
-
   # Backend API
   - type: web
     name: calendar-backend
@@ -24,7 +19,7 @@ services:
         sync: false
       - key: CLIENT_URL
         sync: false
-
+        
   # Frontend
   - type: web
     name: calendar-frontend
