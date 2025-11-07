@@ -82,6 +82,19 @@ app.use((err, req, res, next) => {
   console.error("🔥 Error:", err.stack);
   res.status(500).json({ error: "Internal Server Error" });
 });
+const pool = require("../config/db");
+
+// Example query
+app.get("/api/test-db", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT NOW()");
+    res.json({ time: result.rows[0].now });
+  } catch (err) {
+    console.error("DB error:", err.message);
+    res.status(500).json({ error: "Database query failed" });
+  }
+});
+
 
 // ------------------------
 // HTTP + WebSocket Server
