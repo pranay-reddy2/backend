@@ -176,4 +176,4 @@ class WebSocketServer {
     });
   }
 }
-export default WebSocketServer;
+module.exports = WebSocketServer;
