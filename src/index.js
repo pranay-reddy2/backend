@@ -1,27 +1,28 @@
 // ------------------------
 // Imports and setup
 // ------------------------
-const express = require("express");
-const cors = require("cors");
-const http = require("http");
-const dotenv = require("dotenv");
-const os = require("os");
+import express from "express";
+import cors from "cors";
+import http from "http";
+import dotenv from "dotenv";
+dotenv.config();
 
 dotenv.config();
 
 // ------------------------
 // Routes and modules
 // ------------------------
-const authRoutes = require("./routes/authRoutes");
-const calendarRoutes = require("./routes/calendarRoutes");
-const eventRoutes = require("./routes/eventRoutes");
-const attendeeRoutes = require("./routes/attendees");
-const sharingRoutes = require("./routes/sharing");
-const notificationRoutes = require("./routes/notifications");
-const availabilityRoutes = require("./routes/availability");
-const holidayRoutes = require("./routes/holidayRoutes");
-const reminderRoutes = require("./routes/reminderRoutes");
-const WebSocketServer = require("./websockets");
+import authRoutes from "./routes/authRoutes.js";
+import calendarRoutes from "./routes/calendarRoutes.js";
+import eventRoutes from "./routes/eventRoutes.js";
+import attendeeRoutes from "./routes/attendees.js";
+import sharingRoutes from "./routes/sharing.js";
+import notificationRoutes from "./routes/notifications.js";
+import availabilityRoutes from "./routes/availability.js";
+import holidayRoutes from "./routes/holidayRoutes.js";
+import reminderRoutes from "./routes/reminderRoutes.js";
+import WebSocketServer from "./websockets.js";
+
 
 // ------------------------
 // Express app
@@ -131,4 +132,4 @@ server.listen(PORT, HOST, () => {
   });
 });
 
-module.exports = app;
+export default app;
