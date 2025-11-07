@@ -18,12 +18,35 @@ const app = express();
 const PORT = process.env.PORT || 5050;
 
 // Middleware
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:3000",
+  // Add your laptop's IP address
+  // Replace with actual IP
+  // Add production domain when deployed
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: function (origin, callback) {
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) return callback(null, true);
+
+      if (
+        allowedOrigins.indexOf(origin) !== -1 ||
+        process.env.NODE_ENV === "development"
+      ) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
+
 app.use(express.json());
 
 // Routes
@@ -63,9 +86,26 @@ const wsServer = new WebSocketServer(server);
 // Make wsServer available globally for broadcasting changes
 global.wsServer = wsServer;
 
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// At the bottom of backend/src/index.js
+
+const HOST = process.env.HOST || "0.0.0.0"; // ✅ Listen on all interfaces
+
+server.listen(PORT, HOST, () => {
+  console.log(`Server running on http://${HOST}:${PORT}`);
   console.log(`WebSocket server ready`);
+
+  // Show network addresses for easy access
+  const networkInterfaces = require("os").networkInterfaces();
+  console.log("\n📡 Server accessible at:");
+  console.log(`   - http://localhost:${PORT}`);
+
+  Object.keys(networkInterfaces).forEach((interfaceName) => {
+    networkInterfaces[interfaceName].forEach((iface) => {
+      if (iface.family === "IPv4" && !iface.internal) {
+        console.log(`   - http://${iface.address}:${PORT}`);
+      }
+    });
+  });
 });
 
 module.exports = app;
