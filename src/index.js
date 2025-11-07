@@ -11,7 +11,7 @@ const sharingRoutes = require("./routes/sharing");
 const notificationRoutes = require("./routes/notifications");
 const availabilityRoutes = require("./routes/availability");
 const holidayRoutes = require("./routes/holidayRoutes");
-import WebSocketServer from "./websocket/WebSocketServer.js";
+const WebSocketServer = require("./websockets"); 
 const reminderRoutes = require("./routes/reminderRoutes");
 
 const app = express();
