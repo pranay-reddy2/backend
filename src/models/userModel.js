@@ -1,3 +1,4 @@
+// src/models/userModel.js
 const pool = require('../config/database');
 const bcrypt = require('bcryptjs');
 
@@ -6,8 +7,8 @@ class UserModel {
     const passwordHash = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, name, timezone)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO users (email, password_hash, name, timezone, auth_provider)
+       VALUES ($1, $2, $3, $4, 'email')
        RETURNING id, email, name, timezone, created_at`,
       [email, passwordHash, name, timezone]
     );
@@ -16,20 +17,26 @@ class UserModel {
   }
 
   static async createGoogleUser({ email, googleId, name, profilePicture, timezone = 'UTC' }) {
-    const result = await pool.query(
-      `INSERT INTO users (email, google_id, name, auth_provider, profile_picture, timezone)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (email)
-       DO UPDATE SET
-         google_id = EXCLUDED.google_id,
-         name = EXCLUDED.name,
-         profile_picture = EXCLUDED.profile_picture,
-         updated_at = CURRENT_TIMESTAMP
-       RETURNING id, email, name, google_id, auth_provider, profile_picture, timezone, created_at`,
-      [email, googleId, name, 'google', profilePicture, timezone]
-    );
+    try {
+      const result = await pool.query(
+        `INSERT INTO users (email, google_id, name, auth_provider, profile_picture, timezone)
+         VALUES ($1, $2, $3, 'google', $4, $5)
+         ON CONFLICT (email)
+         DO UPDATE SET
+           google_id = EXCLUDED.google_id,
+           name = EXCLUDED.name,
+           profile_picture = EXCLUDED.profile_picture,
+           auth_provider = 'google',
+           updated_at = CURRENT_TIMESTAMP
+         RETURNING id, email, name, google_id, auth_provider, profile_picture, timezone, created_at`,
+        [email, googleId, name, profilePicture, timezone]
+      );
 
-    return result.rows[0];
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error creating Google user:", error);
+      throw error;
+    }
   }
 
   static async findByEmail(email) {
@@ -56,7 +63,29 @@ class UserModel {
     return result.rows[0];
   }
 
+  static async updateGoogleId(userId, googleId, profilePicture) {
+    try {
+      const result = await pool.query(
+        `UPDATE users 
+         SET google_id = $1, 
+             profile_picture = $2, 
+             auth_provider = 'google',
+             updated_at = CURRENT_TIMESTAMP 
+         WHERE id = $3 
+         RETURNING *`,
+        [googleId, profilePicture, userId]
+      );
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error updating Google ID:", error);
+      throw error;
+    }
+  }
+
   static async verifyPassword(plainPassword, passwordHash) {
+    if (!passwordHash) {
+      return false;
+    }
     return bcrypt.compare(plainPassword, passwordHash);
   }
 
