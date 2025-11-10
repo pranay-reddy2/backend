@@ -25,7 +25,7 @@ app.use((req, res, next) => {
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     process.env.CLIENT_URL,
-    "https://your-frontend-domain.com", // Add your actual frontend domain
+    "https://frontend-coral-one-34.vercel.app", // Add your actual frontend domain
   ].filter(Boolean);
 
   if (allowedOrigins.includes(origin)) {
